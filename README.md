@@ -1,584 +1,315 @@
-<div align="center">
+# CyberPehra Backend (FastAPI)
 
-# 🚨 CyberPehra
+Beginner-friendly backend for **CyberPehra – AI-Powered Predictive Analytics Framework for Cybercrime Complaints**.
 
-### 🛡️ AI-Powered Predictive Cybercrime Intelligence & Cash Withdrawal Hotspot Prediction System
-
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&duration=2500&pause=800&color=00C2FF&center=true&vCenter=true&width=850&lines=Predict+Early+%E2%80%A2+Detect+Risk+%E2%80%A2+Act+Proactively;Forecast+Likely+Cash+Withdrawal+Hotspots;Detect+Suspicious+Financial+Patterns;Generate+Actionable+Cybercrime+Intelligence;Enable+Proactive+Cybercrime+Intervention" />
-
-<br><br>
-
-<img src="https://img.shields.io/badge/AI%2FML-Predictive%20Analytics-00C2FF?style=for-the-badge" />
-<img src="https://img.shields.io/badge/GIS-Risk%20Heatmap-00B894?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Cybersecurity-Intelligence-6C5CE7?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Hackathon-2026-FF7675?style=for-the-badge" />
-
-<br><br>
-
-**Predict Early • Detect Risk • Act Proactively**
-
-</div>
+This folder is a **separate backend**. The Next.js UI lives in `../frontend` and was not changed.
 
 ---
 
-# 🎯 Project Overview
+## 1. Project overview
 
-**CyberPehra** is an AI/ML-powered predictive cybercrime intelligence system designed to analyze historical cybercrime complaints, financial transaction patterns, ATM/location information, and temporal-spatial features to identify **potential high-risk cash withdrawal hotspots in advance**.
+CyberPehra helps police, banks, and I4C staff:
 
-The system transforms historical data into actionable intelligence:
+1. Receive a cybercrime complaint  
+2. Store it in PostgreSQL  
+3. Look at related money transactions  
+4. Run a machine-learning (or demo) risk model  
+5. Turn that into a **0–100 risk score**  
+6. Mark risky cities as **hotspots** for a map  
+7. Create **alerts** when the score is CRITICAL  
+8. Show totals on a **dashboard API**
 
-**Data → Prediction → Risk Score → Hotspot → Heatmap → Alert → Actionable Intelligence**
-
-CyberPehra is designed to support **Law Enforcement Agencies (LEAs), Banks/Financial Institutions, and I4C authorities** in proactive cybercrime intervention.
-
-> ⚠️ **Responsible AI:** CyberPehra provides risk-based decision support. Predictions indicate potential risk and are not definitive evidence of criminal activity. Final decisions remain with authorized human authorities.
-
----
-
-# 🚨 Problem Statement
-
-The National Cybercrime Reporting Portal receives a large and continuously increasing number of cybercrime complaints.
-
-A purely reactive approach can make it difficult to identify emerging patterns before additional fraudulent withdrawals occur.
-
-CyberPehra introduces a **proactive predictive analytics approach**.
-
-Instead of only asking:
-
-> ❌ Where did the fraud happen?
-
-CyberPehra aims to answer:
-
-> 🔮 **Where is suspicious cash-withdrawal activity more likely to occur based on historical and contextual patterns?**
-
-This enables authorities and financial institutions to identify potential hotspots earlier and prioritize monitoring and intervention.
+This is an SIH **prototype**. It is structured so you can later plug in a real trained `model.pkl`.
 
 ---
 
-# 🧠 How CyberPehra Works
+## 2. Features
 
-**Cybercrime Complaints + Financial Transactions + ATM/Location Data**
-
-⬇️
-
-**Data Collection**
-
-⬇️
-
-**Data Cleaning & Preprocessing**
-
-⬇️
-
-**Feature Engineering**
-
-⬇️
-
-**Machine Learning**
-
-**XGBoost + Isolation Forest**
-
-⬇️
-
-**Risk Score Generation**
-
-⬇️
-
-**Likely Withdrawal Hotspot Prediction**
-
-⬇️
-
-**GIS Risk Heatmap**
-
-⬇️
-
-**Intelligent Alerts**
-
-⬇️
-
-**Actionable Intelligence for LEAs & Banks**
+- JWT login with roles: `ADMIN`, `POLICE`, `BANK`, `I4C`
+- Complaint and transaction CRUD-style APIs
+- ML prediction with automatic **fallback** if `model.pkl` is missing
+- Risk engine with editable weights
+- Hotspot list for Leaflet / React maps
+- Critical alerts (`NEW` / `ACKNOWLEDGED` / `RESOLVED`)
+- Dashboard stats
+- Swagger docs at `/docs`
 
 ---
 
-# ⭐ Key Features
+## 3. Technology stack
 
-| Feature                   | Description                                           |
-| ------------------------- | ----------------------------------------------------- |
-| 🔮 Predictive Analytics   | Predict potential high-risk cash withdrawal locations |
-| 🤖 ML Risk Engine         | XGBoost-based risk prediction                         |
-| 🕵️ Anomaly Detection     | Isolation Forest for unusual patterns                 |
-| 📍 Hotspot Detection      | Identify geographically concentrated risk             |
-| 🗺️ GIS Heatmap           | Visualize risk zones interactively                    |
-| ⏰ Time Analysis           | Identify high-risk time windows                       |
-| 📊 Risk Scoring           | Generate location risk score from 0–100               |
-| 🚨 Intelligent Alerts     | Trigger alerts for high-risk zones                    |
-| 🔐 Secure Access          | JWT + RBAC-based access control                       |
-| 📈 Intelligence Dashboard | Centralized predictive intelligence                   |
+| Layer | Tool |
+| --- | --- |
+| API | Python, FastAPI, Uvicorn |
+| Database | PostgreSQL + SQLAlchemy |
+| Validation | Pydantic |
+| Auth | JWT (`python-jose`) + bcrypt (`passlib`) |
+| ML | pandas, NumPy, scikit-learn, joblib |
 
 ---
 
-# 🤖 AI & Machine Learning
-
-## 🔥 XGBoost
-
-XGBoost is used as the primary predictive model for estimating the risk associated with locations based on historical patterns and engineered features.
-
-## 🕵️ Isolation Forest
-
-Isolation Forest is used to detect unusual or anomalous transaction patterns that differ significantly from normal behavior.
-
-## 🧮 Feature Engineering
-
-Important predictive features include:
-
-* Transaction Frequency
-* Withdrawal Amount
-* Previous Fraud Count
-* Complaint Density
-* Hour of Day
-* Day of Week
-* Historical Suspicious Activity
-* Location Risk
-* Geospatial Features
-* ATM Activity
-
----
-
-# 📊 Risk Scoring
-
-CyberPehra converts machine learning predictions into a simple risk score.
-
-🟢 **LOW RISK — 0–40**
-
-🟡 **MEDIUM RISK — 41–70**
-
-🔴 **HIGH RISK — 71–100**
-
-### Example Prediction
-
-| Parameter              | Result        |
-| ---------------------- | ------------- |
-| 📍 Location            | Zone 4        |
-| 📊 Risk Score          | 87 / 100      |
-| 🚨 Risk Level          | HIGH          |
-| 🎯 Predicted Hotspot   | YES           |
-| ⏰ Peak Risk Window     | 18:00 – 21:00 |
-| 🧾 Complaint Density   | HIGH          |
-| 💳 Suspicious Activity | HIGH          |
-
----
-
-# 🗺️ GIS Risk Intelligence
-
-CyberPehra provides interactive geographical visualization of predicted risk zones.
-
-### GIS Technologies
-
-* Leaflet.js
-* OpenStreetMap
-* H3 Geospatial Indexing
-
-### Risk Visualization
-
-🟢 **LOW RISK**
-
-🟡 **MEDIUM RISK**
-
-🔴 **HIGH RISK**
-
-The GIS dashboard can display:
-
-* High-risk areas
-* ATM locations
-* Risk scores
-* Complaint density
-* Transaction activity
-* Time-based risk
-* Crime-category filters
-* Predicted hotspots
-
----
-
-# 🚨 Intelligent Alert System
-
-When a location crosses a configured risk threshold, CyberPehra can generate an actionable alert.
-
-### Example
-
-🚨 **HIGH-RISK ALERT**
-
-📍 **Location:** Zone 4
-
-📊 **Risk Score:** 87/100
-
-⚠️ **Risk Level:** HIGH
-
-⏰ **Peak Risk:** 18:00 – 21:00
-
-🎯 **Predicted Hotspot:** YES
-
-### Recommended Action
-
-Increase monitoring and notify authorized stakeholders.
-
-### Notification Channels
-
-* Dashboard Notifications
-* Email
-* SMS
-* REST API
-* WebSocket / Real-Time Events
-
----
-
-# 📊 Intelligence Dashboard
-
-The dashboard provides a centralized view of predictive cybercrime intelligence.
-
-### Dashboard Components
-
-📊 Total Complaints
-
-🚨 High-Risk Areas
-
-🏧 High-Risk ATMs
-
-📈 Risk Distribution
-
-🗺️ GIS Risk Heatmap
-
-⏰ Time-Based Risk
-
-🧾 Crime Category
-
-🔔 Active Alerts
-
-📍 Location Intelligence
-
----
-
-# 🏗️ System Architecture
-
-<div align="center">
-
-### 📥 DATA SOURCES
-
-Cybercrime Complaints
-Financial Transactions
-ATM & Location Data
-
-⬇️
-
-### ⚙️ DATA PROCESSING
-
-Python • Pandas • NumPy
-
-⬇️
-
-### 🧮 FEATURE ENGINEERING
-
-Time • Transaction • Fraud • Location Features
-
-⬇️
-
-### 🤖 AI / ML ENGINE
-
-XGBoost • Isolation Forest
-
-⬇️
-
-### 📊 RISK ENGINE
-
-Risk Score: **0–100**
-
-⬇️
-
-### 📍 HOTSPOT PREDICTION
-
-Likely Cash Withdrawal Locations
-
-⬇️
-
-### ⚡ FASTAPI BACKEND
-
-Prediction & Intelligence APIs
-
-⬇️
-
-### 🎨 NEXT.JS DASHBOARD
-
-Analytics • Alerts • Visualization
-
-⬇️
-
-### 🗺️ GIS ENGINE
-
-Leaflet • OpenStreetMap • H3
-
-⬇️
-
-### 🛡️ ACTIONABLE INTELLIGENCE
-
-LEAs • Banks/FIs • I4C
-
-</div>
-
----
-
-# 🛠️ Technology Stack
-
-| Layer                | Technologies                    |
-| -------------------- | ------------------------------- |
-| 🎨 Frontend          | Next.js, React, Tailwind CSS    |
-| 🗺️ Mapping          | Leaflet.js, OpenStreetMap, H3   |
-| ⚙️ Backend           | Python, FastAPI, Pydantic       |
-| 🧠 Machine Learning  | Scikit-learn, XGBoost           |
-| 🔍 Anomaly Detection | Isolation Forest                |
-| 📊 Data Processing   | Pandas, NumPy                   |
-| 🤖 AI/LLM            | LangChain, Groq API             |
-| 🗄️ Database         | MongoDB                         |
-| 🚨 Alerts            | Email API, SMS API, WebSocket   |
-| 🔐 Security          | JWT, RBAC, HTTPS, Audit Logging |
-| 🚀 DevOps            | Git, GitHub, Docker, Cloud      |
-
----
-
-# 📁 Project Structure
-
-CyberPehra/
-
-├── data/
-
-│   ├── raw/
-
-│   └── processed/
-
-├── ml/
-
-│   ├── preprocessing.py
-
-│   ├── feature_engineering.py
-
-│   ├── train_model.py
-
-│   ├── predict.py
-
-│   └── anomaly_detection.py
-
-├── models/
-
-│   └── trained_models/
-
-├── backend/
-
-│   ├── main.py
-
-│   ├── routes/
-
-│   ├── services/
-
-│   └── schemas/
-
-├── frontend/
-
-│   ├── app/
-
-│   ├── components/
-
-│   └── services/
-
-├── notebooks/
-
+## 4. Folder structure (what each part does)
+
+```
+backend/
+├── app/
+│   ├── main.py                 # Starts FastAPI, CORS, routers, / and /health
+│   ├── core/
+│   │   ├── config.py           # Reads .env (DATABASE_URL, SECRET_KEY, ...)
+│   │   └── security.py         # Password hashing + JWT + current user
+│   ├── database/
+│   │   ├── database.py         # Engine + get_db() session
+│   │   └── models.py           # Tables: users, complaints, transactions, ...
+│   ├── routers/                # HTTP endpoints (what the frontend calls)
+│   ├── schemas/                # Request/response shapes (Pydantic)
+│   ├── services/               # ML, risk, hotspot, alert logic
+│   └── utils/helpers.py        # Small shared functions
+├── ml_models/
+│   ├── model.pkl               # Optional trained model (created later)
+│   └── create_demo_model.py    # Optional script to generate a tiny .pkl
 ├── requirements.txt
-
-├── Dockerfile
-
+├── .env.example
 └── README.md
+```
 
 ---
 
-# 🔐 Security & Responsible AI
+## 5. How the three main pieces connect
 
-CyberPehra is designed for sensitive cybercrime and financial intelligence workflows.
+### Frontend (Next.js) → Backend (FastAPI)
 
-### Security Measures
+The UI should call `http://127.0.0.1:8000/...` (CORS already allows `http://localhost:3000`).
 
-🔐 JWT Authentication
+Typical login flow:
 
-👤 Role-Based Access Control
+1. `POST /auth/login` with `{ "email", "password" }`
+2. Save `access_token`
+3. On every later request send header:  
+   `Authorization: Bearer <access_token>`
 
-🛡️ Secure REST APIs
+Example:
 
-✅ Input Validation
+```javascript
+const res = await fetch("http://127.0.0.1:8000/auth/login", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "admin@cyberpehra.local", password: "yourpassword" }),
+});
+const data = await res.json();
+// data.access_token
+```
 
-🔒 HTTPS / SSL
+### FastAPI → PostgreSQL
 
-📜 Audit Logging
+`get_db()` opens a SQLAlchemy session for one request. Routers use it to `query`, `add`, and `commit` rows. Connection string comes from `DATABASE_URL` in `.env`.
 
-🚫 Controlled Data Access
+### FastAPI → ML model
 
-🔑 Secure Environment Variables
+`POST /predictions/predict` calls `MLPredictionService`:
 
-### Human-in-the-Loop
-
-**AI Prediction**
-
-⬇️
-
-**Risk Intelligence**
-
-⬇️
-
-**Human Verification**
-
-⬇️
-
-**Authorized Decision**
-
-⬇️
-
-**Action**
-
-AI predictions should support investigators rather than automatically make operational decisions.
+1. Build numeric features from the complaint + transactions  
+2. If `ml_models/model.pkl` loads, use `predict_proba`  
+3. If not, use the **demo formula** (backend still runs)  
+4. `calculate_risk_score()` mixes ML (40%) with amount, location, pattern, and time  
 
 ---
 
-# 🎯 Expected Impact
+## 6. Installation steps (Windows PowerShell)
 
-⚡ **Faster Detection**
+Do these from the **backend** folder.
 
-Identify potential risk areas earlier.
+### 6.1 Go to the backend folder
 
-🎯 **Better Risk Targeting**
+```powershell
+cd E:\SIH2026\CyberPehra---clone\backend
+```
 
-Prioritize locations with elevated risk.
+### 6.2 Create a virtual environment
 
-🗺️ **Location Intelligence**
+A virtual environment is a private Python folder so packages do not mix with the rest of your PC.
 
-Understand geographical crime patterns.
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
 
-🚨 **Proactive Alerts**
+If Windows blocks scripts, run this once in PowerShell as Administrator, then try Activate again:
 
-Notify authorized stakeholders before risks escalate.
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
 
-🤝 **LEA–Bank Coordination**
+Your prompt should start with `(venv)`.
 
-Improve coordination between enforcement agencies and financial institutions.
+### 6.3 Install dependencies
 
-📊 **Data-Driven Decisions**
-
-Support investigation and resource allocation using predictive intelligence.
-
----
-
-# 🔮 Future Scope
-
-* Real-Time Transaction Stream Analysis
-* Advanced Spatiotemporal Forecasting
-* Graph-Based Fraud Detection
-* Federated Learning
-* Advanced GIS Analytics
-* Automated Intelligence Reports
-* Real-Time Institutional Integration
-* Advanced Alert Orchestration
-* Blockchain-Based Audit Trail
-* Explainable AI
-* Continuous Model Monitoring
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
 
 ---
 
-# 🏆 Hackathon Information
+## 7. PostgreSQL setup
 
-| Category        | Details                                      |
-| --------------- | -------------------------------------------- |
-| 🏢 Organization | Ministry of Home Affairs                     |
-| 🛡️ Department  | Indian Cyber Crime Coordination Centre (I4C) |
-| 💻 Category     | Software                                     |
-| 🔐 Theme        | Blockchain & Cybersecurity                   |
-| 🧠 Domain       | Cybersecurity & Predictive Analytics         |
+1. Install PostgreSQL and start the service.
+2. Open **pgAdmin** or `psql`.
+3. Create a database named `cyberpehra_db`:
 
----
+```sql
+CREATE DATABASE cyberpehra_db;
+```
 
-# 👥 Team
+4. Remember your PostgreSQL username and password (often `postgres`).
 
-| Member             | Responsibility               |
-| ------------------ | ---------------------------- |
-| **Kedar Deshmukh** | AI/ML & Predictive Analytics |
-| **Team Member 2**  | Backend Development          |
-| **Team Member 3**  | Frontend & Dashboard         |
-| **Team Member 4**  | GIS & Integration            |
-
-> ✏️ Replace the placeholder names with your actual team members.
+On first API start, FastAPI **creates tables automatically**. You do not need to write `CREATE TABLE` by hand for this prototype.
 
 ---
 
-# 🌟 Why CyberPehra?
+## 8. Environment variables
 
-Traditional cybercrime response is often **reactive**.
+```powershell
+copy .env.example .env
+```
 
-CyberPehra introduces a **predictive and proactive intelligence layer**.
+Edit `backend/.env` (use your real DB user, but never commit this file):
 
-### 🔴 Traditional Approach
+```
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/cyberpehra_db
+SECRET_KEY=any-long-random-string-for-the-demo
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
 
-**Fraud Happens**
+`SECRET_KEY` signs JWT tokens. `DATABASE_URL` is how FastAPI finds PostgreSQL.
 
-⬇️
-
-**Complaint Registered**
-
-⬇️
-
-**Investigation Starts**
-
-### 🟢 CyberPehra Approach
-
-**Historical Data**
-
-⬇️
-
-**AI/ML Analysis**
-
-⬇️
-
-**Risk Prediction**
-
-⬇️
-
-**Hotspot Identification**
-
-⬇️
-
-**Early Alert**
-
-⬇️
-
-**Proactive Intervention**
+You can keep the URL as `postgresql://...`. The backend automatically uses the modern `psycopg` driver (needed on Python 3.14).
 
 ---
 
-# 🚀 Project Vision
+## 9. How to run the backend
 
-<div align="center">
+Always run from the `backend` folder with the venv activated:
 
-## 🛡️ CyberPehra
+```powershell
+cd E:\SIH2026\CyberPehra---clone\backend
+.\venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload
+```
 
-### **Predict Early • Detect Risk • Act Proactively**
+Then open:
 
-<br>
-
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=18&duration=2800&pause=900&color=00C2FF&center=true&vCenter=true&width=850&lines=Turning+Cybercrime+Data+into+Predictive+Intelligence;Forecasting+Potential+Withdrawal+Hotspots;Detecting+Suspicious+Financial+Patterns;Enabling+Proactive+Cybercrime+Intervention;Building+a+Safer+Digital+India" />
-
-<br><br>
-
-**AI • Machine Learning • GIS • Cybersecurity • Predictive Analytics**
-
-</div>
+- API root: http://127.0.0.1:8000  
+- Health: http://127.0.0.1:8000/health  
+- Swagger (try APIs in the browser): http://127.0.0.1:8000/docs  
+- ReDoc: http://127.0.0.1:8000/redoc  
 
 ---
 
-<div align="center">
+## 10. First API calls (order matters)
 
-### 🚨 CYBERPEHRA
+1. **Register** `POST /auth/register`
 
-**From Reactive Cybercrime Response to Proactive Cybercrime Intelligence**
+```json
+{
+  "name": "Admin User",
+  "email": "admin@cyberpehra.local",
+  "password": "password123",
+  "role": "ADMIN"
+}
+```
 
-</div>
+Roles must be one of: `ADMIN`, `POLICE`, `BANK`, `I4C`.
+
+2. **Login** `POST /auth/login` → copy `access_token`.
+3. In Swagger click **Authorize** and paste the token (or send the Bearer header).
+4. **Create complaint** `POST /complaints`
+5. Optional: **Create transaction** `POST /transactions` (include `complaint_id`)
+6. **Predict** `POST /predictions/predict` with `{ "complaint_id": 1 }`
+7. Open `/dashboard/stats`, `/hotspots`, `/alerts`
+
+---
+
+## 11. API endpoint list
+
+| Method | Path | Auth | What it does |
+| --- | --- | --- | --- |
+| GET | `/` | No | API is running |
+| GET | `/health` | No | Health check |
+| POST | `/auth/register` | No | Create user |
+| POST | `/auth/login` | No | Get JWT |
+| GET | `/auth/me` | Yes | Current user |
+| POST | `/complaints` | Yes | Create complaint |
+| GET | `/complaints` | Yes | List complaints |
+| GET | `/complaints/{id}` | Yes | One complaint |
+| PUT | `/complaints/{id}` | Yes | Update complaint |
+| DELETE | `/complaints/{id}` | ADMIN or I4C | Delete complaint |
+| POST | `/transactions` | Yes | Add transaction |
+| GET | `/transactions` | Yes | List transactions |
+| GET | `/transactions/{id}` | Yes | One transaction |
+| GET | `/transactions/complaint/{complaint_id}` | Yes | Transactions for a complaint |
+| POST | `/predictions/predict` | Yes | Run ML + risk score |
+| GET | `/predictions` | Yes | List predictions |
+| GET | `/predictions/{id}` | Yes | One prediction |
+| GET | `/hotspots` | Yes | All map zones |
+| GET | `/hotspots/high-risk` | Yes | HIGH + CRITICAL zones |
+| GET | `/alerts` | Yes | All alerts |
+| GET | `/alerts/high-risk` | Yes | High/critical alerts |
+| PUT | `/alerts/{id}/status` | Yes | NEW / ACKNOWLEDGED / RESOLVED |
+| GET | `/dashboard/stats` | Yes | Totals for the UI |
+| GET | `/dashboard/recent-alerts` | Yes | Latest 10 alerts |
+| GET | `/dashboard/risk-distribution` | Yes | Counts by risk level |
+
+---
+
+## 12. Risk score (easy to change later)
+
+File: `app/services/risk_service.py`
+
+| Input | Weight |
+| --- | --- |
+| ML prediction | 40% |
+| Fraud amount | 20% |
+| Location risk | 20% |
+| Transaction pattern | 10% |
+| Time risk | 10% |
+
+| Score | Level |
+| --- | --- |
+| 0–30 | LOW |
+| 31–60 | MEDIUM |
+| 61–80 | HIGH |
+| 81–100 | CRITICAL |
+
+If `risk_score >= 81`, an alert is created automatically.
+
+---
+
+## 13. Optional: create `model.pkl`
+
+The API works without this. To generate a tiny demo sklearn model:
+
+```powershell
+python -m ml_models.create_demo_model
+```
+
+Later, replace `ml_models/model.pkl` with your real trained model. Keep the same 10-feature order used in `MLPredictionService._features_to_vector`.
+
+---
+
+## 14. Common errors
+
+| Problem | What to do |
+| --- | --- |
+| `password authentication failed` | Fix username/password in `DATABASE_URL` |
+| `database "cyberpehra_db" does not exist` | Run `CREATE DATABASE cyberpehra_db;` |
+| `Could not import module app.main` | You are not inside the `backend` folder |
+| `401 Invalid credentials` | Login again; put `Bearer` token on the request |
+| Packages fail on Python 3.14 | Install Python 3.11 or 3.12 and recreate `venv` |
+
+---
+
+## 15. Security note
+
+This is a **hackathon prototype**. Before any real deployment: change `SECRET_KEY`, use HTTPS, restrict CORS, and add proper migrations (Alembic) instead of `create_all` on startup.
