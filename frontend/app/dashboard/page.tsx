@@ -2,1342 +2,545 @@
 
 import React, { useState, useEffect, useCallback, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  RadarIcon, ShieldAlertIcon, MapPinIcon, BrainIcon, FileTextIcon,
+  ActivityIcon, PlusCircleIcon, RefreshCwIcon, ExternalLinkIcon,
+  LogOutIcon, MenuIcon, XIcon, LockIcon,
+} from '@/app/components/icons';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const BOOT = ['AUTHENTICATING LEA SESSION', 'VERIFYING CLEARANCE', 'LOADING INTEL FEEDS', 'READY'];
 
-// Icons
-const RadarIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="6" />
-    <circle cx="12" cy="12" r="2" />
-    <line x1="12" y1="12" x2="12" y2="2" />
-    <line x1="12" y1="12" x2="22" y2="12" />
-  </svg>
-);
+type Tab = 'prediction' | 'hotspots' | 'complaints';
+type Tone = 'cyan' | 'emerald' | 'amber' | 'red';
 
-const ShieldAlertIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);
+const TONE: Record<Tone, { icon: string; tag: string; border: string; glow: string }> = {
+  cyan:    { icon: 'text-cyan-400',    tag: 'text-cyan-400',    border: 'border-cyan-500/20',    glow: 'bg-cyan-500/10' },
+  emerald: { icon: 'text-emerald-400', tag: 'text-emerald-400', border: 'border-emerald-500/20', glow: 'bg-emerald-500/10' },
+  amber:   { icon: 'text-amber-400',   tag: 'text-amber-400',   border: 'border-amber-500/20',   glow: 'bg-amber-500/10' },
+  red:     { icon: 'text-red-400',     tag: 'text-red-400',     border: 'border-red-500/20',     glow: 'bg-red-500/10' },
+};
 
-const MapPinIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0z" />
-    <circle cx="12" cy="10" r="3" />
-  </svg>
-);
+const SCENARIO_TONE: Record<Tone, string> = {
+  cyan:    'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25',
+  emerald: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25',
+  amber:   'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25',
+  red:     'bg-red-500/15 border-red-500/40 text-red-300 hover:bg-red-500/25',
+};
 
-const BrainIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 4a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.5.7.5 1.2 1.3 1.5 2.2a4 4 0 0 1-6.5 4.1A4 4 0 0 1 3 14c0-1.2.5-2.3 1.3-3.1C4.2 9.3 4 8.4 4 7.5a4 4 0 0 1 4-4z" />
-  </svg>
-);
+const TABS: { key: Tab; label: string; icon: any }[] = [
+  { key: 'prediction', label: 'AI Risk Predictor', icon: BrainIcon },
+  { key: 'hotspots',   label: 'Map Hotspots',      icon: MapPinIcon },
+  { key: 'complaints', label: 'Complaints',        icon: FileTextIcon },
+];
 
-const FileTextIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-    <polyline points="10 9 9 9 8 9" />
-  </svg>
-);
+const SCENARIOS: { label: string; tone: Tone; v: string[] }[] = [
+  { label: 'High Risk ATM (₹85k, 1AM)',     tone: 'red',     v: ['85000', '1', '12', '5', '19.0760', '72.8777'] },
+  { label: 'Moderate UPI (₹35k, 2PM)',      tone: 'amber',   v: ['35000', '14', '4', '1', '19.1383', '77.3210'] },
+  { label: 'Low Risk Normal (₹4.5k, 11AM)', tone: 'emerald', v: ['4500', '11', '1', '0', '18.5204', '73.8567'] },
+];
 
-const ActivityIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-  </svg>
-);
+const riskColor = (s: number) => (s > 70 ? '#ef4444' : s > 30 ? '#f59e0b' : '#10b981');
+const riskBadge = (s: number) => (s > 70 ? 'badge-danger' : s > 30 ? 'badge-warning' : 'badge-success');
+const money = (n: number | null) => (n != null ? `₹${n.toLocaleString('en-IN')}` : 'N/A');
+const mapLink = (la: number, lo: number) => `https://www.google.com/maps?q=${la},${lo}`;
 
-const PlusCircleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="16" />
-    <line x1="8" y1="12" x2="16" y2="12" />
-  </svg>
-);
-
-const RefreshCwIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="23 4 23 10 17 10" />
-    <polyline points="1 20 1 14 7 14" />
-    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-  </svg>
-);
-
-const ExternalLinkIcon = ({ className = 'w-3.5 h-3.5' }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-    <polyline points="15 3 21 3 21 9" />
-    <line x1="10" y1="14" x2="21" y2="3" />
-  </svg>
-);
-
-type ActiveTab = 'prediction' | 'hotspots' | 'complaints' | 'transactions';
-
-interface PredictionData {
-  risk_score: number;
-  risk_level: string;
-  latitude: number;
-  longitude: number;
-  hotspot_status: string;
-  recommendation: string;
-  evaluated_at?: string;
+async function api<T>(path: string, init?: RequestInit): Promise<T | null> {
+  try {
+    const res = await fetch(`${API}${path}`, init);
+    return res.ok ? ((await res.json()) as T) : null;
+  } catch { return null; }
 }
 
-interface HotspotItem {
-  latitude: number;
-  longitude: number;
-  incident_count: number;
-  risk_level: string;
+function Field({ label, ...p }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <div>
+      <label className="label-text">{label}</label>
+      <input {...p} className="input-field" />
+    </div>
+  );
 }
 
-interface ComplaintItem {
-  id: number;
-  crime_type: string;
-  fraud_amount: number | null;
-  location: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  complaint_time: string;
-  status: string;
+function Modal({ title, onClose, onSubmit, submitLabel, submitting, accent, children }: {
+  title: string; onClose: () => void; onSubmit: (e: FormEvent) => void;
+  submitLabel: string; submitting: boolean; accent: 'primary' | 'danger'; children: React.ReactNode;
+}) {
+  return (
+    <div className="modal-overlay cp-fade" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-content cp-rise border border-red-500/20 relative">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-display text-lg font-bold tracking-tight text-white">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><XIcon className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-3 text-xs">
+          {children}
+          <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+            <button type="button" onClick={onClose} className="btn-secondary text-xs">Cancel</button>
+            <button type="submit" disabled={submitting} className={`btn-${accent} text-xs`}>
+              {submitting ? 'Processing…' : submitLabel}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
-interface TransactionItem {
-  id: number;
-  transaction_id: string;
-  complaint_id: number;
-  amount: number;
-  transaction_type: string | null;
-  transaction_time: string;
-  source_account: string | null;
-  destination_account: string | null;
+function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="data-table">
+        <thead><tr>{head.map((h, i) => <th key={i} className={i === head.length - 1 ? 'text-right' : ''}>{h}</th>)}</tr></thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
 }
+
+function Empty({ icon: Icon, label }: { icon: any; label: string }) {
+  return (
+    <div className="empty-state cp-fade">
+      <Icon className="w-10 h-10 text-slate-600" />
+      <p className="text-sm text-slate-300">{label}</p>
+    </div>
+  );
+}
+
+function Stat({ icon: Icon, tone, tag, label, value, note, delay }: {
+  icon: any; tone: Tone; tag: string; label: string; value: string; note: string; delay: number;
+}) {
+  const t = TONE[tone];
+  return (
+    <div className={`cp-rise cp-delay-${delay} cp-card-hover group relative card p-4 border ${t.border} overflow-hidden`}>
+      <div className={`absolute -top-10 -right-10 w-24 h-24 rounded-full ${t.glow} blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
+      <div className="relative flex items-center justify-between mb-2">
+        <Icon className={`w-5 h-5 ${t.icon} cp-glow-pulse`} />
+        <span className={`text-[10px] font-mono ${t.tag} font-bold tracking-widest`}>{tag}</span>
+      </div>
+      <p className="relative text-[10px] font-mono text-slate-400 uppercase tracking-wider">{label}</p>
+      <p className="relative font-display tabular text-lg font-bold text-white mt-0.5 tracking-tight">{value}</p>
+      <p className={`relative text-[10px] ${t.tag} font-mono mt-1`}>{note}</p>
+    </div>
+  );
+}
+
+
 
 export default function DashboardPage() {
   const router = useRouter();
 
-  // Auth state
-  const [user, setUser] = useState<string>('Commander');
-  const [role, setRole] = useState<string>('LEA');
-  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState('LEA-OFFICER-409');
+  const [ready, setReady] = useState(false);
+  const [bootStep, setBootStep] = useState(0);
+  const [tab, setTab] = useState<Tab>('prediction');
+  const [navOpen, setNavOpen] = useState(false);
+  const [online, setOnline] = useState<boolean | null>(null);
 
-  // Tab State
-  const [tab, setTab] = useState<ActiveTab>('prediction');
+  const [form, setForm] = useState({
+    amount: '85000', hour: '1', freq: '12', prev: '5', lat: '19.0760', lng: '72.8777',
+  });
+  const [predicting, setPredicting] = useState(false);
+  const [predictErr, setPredictErr] = useState('');
+  const [result, setResult] = useState<any>(null);
 
-  // Backend Health
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [hotspots, setHotspots] = useState<any[]>([]);
+  const [complaints, setComplaints] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Prediction Form State
-  const [amount, setAmount] = useState('65000');
-  const [hour, setHour] = useState('2');
-  const [frequency, setFrequency] = useState('8');
-  const [previousFraud, setPreviousFraud] = useState('3');
-  const [lat, setLat] = useState('19.0760');
-  const [lng, setLng] = useState('72.8777');
+  const [newComplaint, setNewComplaint] = useState({
+    crime_type: 'UPI Fraud', fraud_amount: '45000',
+    location: 'Mumbai Cyber Cell', latitude: '19.076', longitude: '72.877',
+  });
+  const [complaintOpen, setComplaintOpen] = useState(false);
 
-  const [predictLoading, setPredictLoading] = useState(false);
-  const [predictError, setPredictError] = useState('');
-  const [prediction, setPrediction] = useState<PredictionData | null>(null);
 
-  // Hotspots State
-  const [hotspots, setHotspots] = useState<HotspotItem[]>([]);
-  const [hotspotsLoading, setHotspotsLoading] = useState(false);
-
-  // Complaints State
-  const [complaints, setComplaints] = useState<ComplaintItem[]>([]);
-  const [complaintsLoading, setComplaintsLoading] = useState(false);
-  const [showNewComplaintModal, setShowNewComplaintModal] = useState(false);
-  const [newComplaintCrimeType, setNewComplaintCrimeType] = useState('UPI Fraud');
-  const [newComplaintAmount, setNewComplaintAmount] = useState('45000');
-  const [newComplaintLocation, setNewComplaintLocation] = useState('Mumbai Cyber Cell');
-  const [newComplaintLat, setNewComplaintLat] = useState('19.076');
-  const [newComplaintLng, setNewComplaintLng] = useState('72.877');
-  const [createComplaintLoading, setCreateComplaintLoading] = useState(false);
-
-  // Transactions State
-  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(false);
-  const [showNewTxModal, setShowNewTxModal] = useState(false);
-  const [newTxId, setNewTxId] = useState('TXN-8492');
-  const [newTxComplaintId, setNewTxComplaintId] = useState('1');
-  const [newTxAmount, setNewTxAmount] = useState('25000');
-  const [newTxType, setNewTxType] = useState('ATM Cash Withdrawal');
-  const [newTxSource, setNewTxSource] = useState('AC-98321049');
-  const [newTxDest, setNewTxDest] = useState('ATM-WEST-402');
-  const [createTxLoading, setCreateTxLoading] = useState(false);
-
-  // Ping backend health
-  const checkHealth = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/health`, { method: 'GET' });
-      if (res.ok) {
-        setBackendOnline(true);
-      } else {
-        setBackendOnline(false);
-      }
-    } catch {
-      setBackendOnline(false);
-    }
+  const load = useCallback(async (kind: Tab) => {
+    setLoading(true);
+    if (kind === 'hotspots')   setHotspots((await api<any>('/hotspot/'))?.hotspots || []);
+    if (kind === 'complaints') setComplaints((await api<any[]>('/complaints/')) || []);
+    setLoading(false);
   }, []);
 
-  // Fetch Hotspots
-  const fetchHotspots = useCallback(async () => {
-    setHotspotsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/hotspot/`);
-      if (res.ok) {
-        const data = await res.json();
-        setHotspots(data.hotspots || []);
-      }
-    } catch (e) {
-      console.error('Failed to fetch hotspots', e);
-    } finally {
-      setHotspotsLoading(false);
-    }
-  }, []);
 
-  // Fetch Complaints
-  const fetchComplaints = useCallback(async () => {
-    setComplaintsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/complaints/`);
-      if (res.ok) {
-        const data = await res.json();
-        setComplaints(data || []);
-      }
-    } catch (e) {
-      console.error('Failed to fetch complaints', e);
-    } finally {
-      setComplaintsLoading(false);
-    }
-  }, []);
 
-  // Fetch Transactions
-  const fetchTransactions = useCallback(async () => {
-    setTransactionsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/transactions/`);
-      if (res.ok) {
-        const data = await res.json();
-        setTransactions(data || []);
-      }
-    } catch (e) {
-      console.error('Failed to fetch transactions', e);
-    } finally {
-      setTransactionsLoading(false);
-    }
-  }, []);
-
-  // Check auth and bootstrap dashboard
   useEffect(() => {
-    const isAuth = typeof window !== 'undefined' ? localStorage.getItem('cyberpehra_authenticated') : null;
-    if (!isAuth) {
-      router.push('/');
-      return;
-    }
-    const storedUser = localStorage.getItem('cyberpehra_user') || 'Officer';
-    const storedRole = localStorage.getItem('cyberpehra_role') || 'LEA';
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setBootStep(i);
+      if (i >= BOOT.length) clearInterval(id);
+    }, 240);
+    return () => clearInterval(id);
+  }, []);
 
-    let isMounted = true;
-    const timer = setTimeout(() => {
-      if (isMounted) {
-        setUser(storedUser);
-        setRole(storedRole);
-        setAuthReady(true);
-        checkHealth();
-        fetchHotspots();
-        fetchComplaints();
-        fetchTransactions();
-      }
-    }, 0);
+  useEffect(() => {
+    const isAuth = localStorage.getItem('cyberpehra_authenticated');
+    const role = localStorage.getItem('cyberpehra_role');
+    if (!isAuth || role !== 'LEA') { router.push('/login'); return; }
+    setUser(localStorage.getItem('cyberpehra_user') || 'LEA-OFFICER-409');
+    setReady(true);
+    api('/health').then((d) => setOnline(!!d));
+    load('hotspots');
+    load('complaints');
+  }, [router, load]);
 
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
+  const switchTab = (k: Tab) => {
+    setTab(k); setNavOpen(false);
+    if (k === 'hotspots')   load('hotspots');
+    if (k === 'complaints') load('complaints');
+  };
+
+  const logout = () => {
+    ['cyberpehra_authenticated', 'cyberpehra_user', 'cyberpehra_role'].forEach((k) => localStorage.removeItem(k));
+    router.push('/login');
+  };
+
+  const predict = async (e: FormEvent) => {
+    e.preventDefault();
+    setPredicting(true); setPredictErr('');
+    const payload = {
+      transaction_amount: +form.amount, transaction_hour: +form.hour,
+      transaction_frequency: +form.freq, previous_fraud_count: +form.prev,
+      latitude: +form.lat, longitude: +form.lng,
     };
-  }, [router, checkHealth, fetchHotspots, fetchComplaints, fetchTransactions]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('cyberpehra_authenticated');
-    localStorage.removeItem('cyberpehra_user');
-    localStorage.removeItem('cyberpehra_role');
-    router.push('/');
+    const data = await api<any>('/withdrawal/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    if (!data) setPredictErr(`Unable to complete prediction. Ensure FastAPI backend is active at ${API}`);
+    else setResult({
+      risk_score: data.risk_score ?? 0, risk_level: data.risk_level ?? 'Unknown',
+      latitude: data.latitude ?? payload.latitude, longitude: data.longitude ?? payload.longitude,
+      hotspot_status: data.hotspot_status ?? 'Monitored Location',
+      recommendation: data.recommendation ?? 'Review transaction logs.',
+      evaluated_at: new Date().toLocaleTimeString(),
+    });
+    setPredicting(false);
   };
 
-  // Run Prediction
-  const handlePrediction = async (e: FormEvent) => {
+  const createComplaint = async (e: FormEvent) => {
     e.preventDefault();
-    setPredictLoading(true);
-    setPredictError('');
-
-    try {
-      const payload = {
-        transaction_amount: Number(amount),
-        transaction_hour: Number(hour),
-        transaction_frequency: Number(frequency),
-        previous_fraud_count: Number(previousFraud),
-        latitude: Number(lat),
-        longitude: Number(lng),
-      };
-
-      // Call withdrawal prediction API
-      const res = await fetch(`${API_BASE}/withdrawal/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Server returned status ${res.status}`);
-      }
-
-      const data = await res.json();
-      setPrediction({
-        risk_score: data.risk_score ?? 0,
-        risk_level: data.risk_level ?? 'Unknown',
-        latitude: data.latitude ?? payload.latitude,
-        longitude: data.longitude ?? payload.longitude,
-        hotspot_status: data.hotspot_status ?? 'Monitored Location',
-        recommendation: data.recommendation ?? 'Review transaction logs.',
-        evaluated_at: new Date().toLocaleTimeString(),
-      });
-    } catch (err) {
-      console.error(err);
-      setPredictError(
-        'Unable to complete prediction. Ensure FastAPI backend is active at ' +
-          API_BASE
-      );
-    } finally {
-      setPredictLoading(false);
-    }
+    const ok = await api('/complaints/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...newComplaint, fraud_amount: +newComplaint.fraud_amount,
+        latitude: +newComplaint.latitude, longitude: +newComplaint.longitude,
+      }),
+    });
+    if (ok !== null) { setComplaintOpen(false); load('complaints'); load('hotspots'); }
   };
 
-  // Set Preset
-  const applyPreset = (
-    amt: string,
-    hr: string,
-    freq: string,
-    prev: string,
-    la: string,
-    lo: string
-  ) => {
-    setAmount(amt);
-    setHour(hr);
-    setFrequency(freq);
-    setPreviousFraud(prev);
-    setLat(la);
-    setLng(lo);
-  };
-
-  // Handle Create Complaint
-  const handleCreateComplaint = async (e: FormEvent) => {
-    e.preventDefault();
-    setCreateComplaintLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/complaints/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          crime_type: newComplaintCrimeType,
-          fraud_amount: Number(newComplaintAmount),
-          location: newComplaintLocation,
-          latitude: Number(newComplaintLat),
-          longitude: Number(newComplaintLng),
-        }),
-      });
-      if (res.ok) {
-        setShowNewComplaintModal(false);
-        fetchComplaints();
-        fetchHotspots();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setCreateComplaintLoading(false);
-    }
-  };
-
-  // Handle Create Transaction
-  const handleCreateTx = async (e: FormEvent) => {
-    e.preventDefault();
-    setCreateTxLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/transactions/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transaction_id: newTxId,
-          complaint_id: Number(newTxComplaintId),
-          amount: Number(newTxAmount),
-          transaction_type: newTxType,
-          source_account: newTxSource,
-          destination_account: newTxDest,
-        }),
-      });
-      if (res.ok) {
-        setShowNewTxModal(false);
-        setNewTxId('TXN' + Math.floor(1000 + Math.random() * 9000));
-        fetchTransactions();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setCreateTxLoading(false);
-    }
-  };
-
-  if (!authReady) {
-    return (
-      <div className="min-h-screen bg-[#050914] flex items-center justify-center text-cyan-400">
-        <div className="flex items-center gap-3">
-          <RadarIcon className="w-8 h-8 animate-spin" />
-          <span className="tracking-widest font-mono text-sm">INITIALIZING CYBERPEHRA CONSOLE...</span>
-        </div>
+  if (!ready) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#020617] cyber-grid-secure gap-3">
+      <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 cp-glow-pulse">
+        <RadarIcon className="w-8 h-8 animate-radar-sweep" />
+        <span className="absolute inset-0 rounded-2xl border border-red-500/40" style={{ animation: 'cp-pulse-ring 2s ease-out infinite' }} />
       </div>
-    );
-  }
+      <div className="font-mono text-[11px] tracking-[0.2em] text-red-300">
+        {BOOT[Math.min(bootStep, BOOT.length - 1)]}
+        <span className="cp-blink">_</span>
+      </div>
+    </div>
+  );
+
+  const score = result?.risk_score ?? 0;
+  const color = riskColor(score);
+  const dashOffset = 289 - (289 * Math.min(100, Math.max(0, score))) / 100;
 
   return (
-    <div className="page">
-      <div className="background-grid" />
-      <div className="glow glow-one" />
-      <div className="glow glow-two" />
+    <div className="min-h-screen flex cyber-grid-secure relative overflow-hidden">
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-1/3 left-1/2 -translate-x-1/2 w-[900px] h-[900px] rounded-full bg-red-500/10 blur-[140px]" />
+        <div className="absolute top-1/2 -right-40 w-[600px] h-[600px] rounded-full bg-orange-600/10 blur-[140px]" />
+      </div>
 
-      {/* TOP HEADER */}
-      <header className="dashboard-header">
-        <div className="brand">
-          <div className="brand-icon">
-            <RadarIcon className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1>CYBERPEHRA</h1>
-            <p>Predictive Cybercrime Intelligence</p>
-          </div>
-        </div>
-
-        <div className="dashboard-right">
-          <div className="connection">
-            <span
-              className={`status-dot ${backendOnline === false ? 'danger' : ''}`}
-            />
-            <span>
-              {backendOnline === null
-                ? 'CONNECTING...'
-                : backendOnline
-                ? 'API ENGINE ONLINE'
-                : 'OFFLINE'}
-            </span>
-          </div>
-
-          <div className="role-badge">
-            {role === 'LEA' ? 'LEA COMMAND' : 'CITIZEN AGENT'}
-          </div>
-
-          <div className="text-xs text-slate-400 font-mono px-2 py-1 bg-white/5 rounded border border-white/10">
-            {user}
-          </div>
-
-          <button onClick={handleLogout} className="logout-button hover:bg-white/10 transition-all">
-            Log Out
-          </button>
-        </div>
-      </header>
-
-      {/* DASHBOARD CONTENT */}
-      <main className="dashboard">
-        {/* TITLE & LIVE TICKER */}
-        <div className="dashboard-title">
-          <div>
-            <h2>
-              Operational <span>Console</span>
-            </h2>
-            <p>
-              Predictive fraud monitoring, GIS cash withdrawal cluster analysis & forensic ledger.
-            </p>
-          </div>
-
-          <div className="live-indicator">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-            </span>
-            <span>SYSTEM MONITORING ACTIVE</span>
-          </div>
-        </div>
-
-        {/* TOP METRICS ROW */}
-        <div className="stats-row">
-          <div className="stat-card">
-            <BrainIcon className="w-6 h-6 text-purple-400 mb-2" />
-            <span>AI Risk Classifier</span>
-            <strong>Random Forest v1.0</strong>
-          </div>
-
-          <div className="stat-card">
-            <MapPinIcon className="w-6 h-6 text-cyan-400 mb-2" />
-            <span>Active Hotspots</span>
-            <strong>{hotspots.length} Clusters Detected</strong>
-          </div>
-
-          <div className="stat-card">
-            <FileTextIcon className="w-6 h-6 text-emerald-400 mb-2" />
-            <span>Ingested Complaints</span>
-            <strong>{complaints.length} Records</strong>
-          </div>
-
-          <div className="stat-card">
-            <ActivityIcon className="w-6 h-6 text-amber-400 mb-2" />
-            <span>Monitored Transactions</span>
-            <strong>{transactions.length} Traced</strong>
-          </div>
-        </div>
-
-        {/* NAVIGATION TABS */}
-        <div className="flex border-b border-white/10 mb-6 gap-2 overflow-x-auto">
-          <button
-            onClick={() => setTab('prediction')}
-            className={`flex items-center gap-2 pb-3 px-4 font-semibold text-sm transition-all border-b-2 whitespace-nowrap ${
-              tab === 'prediction'
-                ? 'border-cyan-400 text-cyan-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <BrainIcon className="w-4 h-4" />
-            AI Risk & Hotspot Predictor
-          </button>
-
-          <button
-            onClick={() => {
-              setTab('hotspots');
-              fetchHotspots();
-            }}
-            className={`flex items-center gap-2 pb-3 px-4 font-semibold text-sm transition-all border-b-2 whitespace-nowrap ${
-              tab === 'hotspots'
-                ? 'border-cyan-400 text-cyan-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <MapPinIcon className="w-4 h-4" />
-            Live GIS Hotspots ({hotspots.length})
-          </button>
-
-          <button
-            onClick={() => {
-              setTab('complaints');
-              fetchComplaints();
-            }}
-            className={`flex items-center gap-2 pb-3 px-4 font-semibold text-sm transition-all border-b-2 whitespace-nowrap ${
-              tab === 'complaints'
-                ? 'border-cyan-400 text-cyan-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <FileTextIcon className="w-4 h-4" />
-            Incident Registry ({complaints.length})
-          </button>
-
-          <button
-            onClick={() => {
-              setTab('transactions');
-              fetchTransactions();
-            }}
-            className={`flex items-center gap-2 pb-3 px-4 font-semibold text-sm transition-all border-b-2 whitespace-nowrap ${
-              tab === 'transactions'
-                ? 'border-cyan-400 text-cyan-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <ActivityIcon className="w-4 h-4" />
-            Forensic Transactions ({transactions.length})
-          </button>
-        </div>
-
-        {/* TAB 1: PREDICTION */}
-        {tab === 'prediction' && (
-          <div>
-            {/* Quick Presets */}
-            <div className="flex items-center gap-2 mb-4 overflow-x-auto text-xs">
-              <span className="text-slate-500 font-medium whitespace-nowrap">Load Simulation:</span>
-              <button
-                type="button"
-                onClick={() => applyPreset('85000', '1', '12', '5', '19.0760', '72.8777')}
-                className="px-3 py-1.5 rounded-md bg-red-500/10 text-red-300 border border-red-500/20 hover:bg-red-500/20 transition-all whitespace-nowrap"
-              >
-                High Risk ATM Syndicate (₹85k, 1AM)
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('35000', '14', '4', '1', '19.1383', '77.3210')}
-                className="px-3 py-1.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-all whitespace-nowrap"
-              >
-                Moderate Risk UPI Inflow (₹35k, 2PM)
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('4500', '11', '1', '0', '18.5204', '73.8567')}
-                className="px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all whitespace-nowrap"
-              >
-                Low Risk Standard Transfer (₹4.5k, 11AM)
-              </button>
+      <aside className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-slate-950/90 backdrop-blur-xl border-r border-red-500/20 flex flex-col transition-transform duration-300 ${navOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="relative flex items-center justify-between px-5 h-16 border-b border-white/10">
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+          <div className="flex items-center gap-3">
+            <div className="relative w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+              <RadarIcon className="w-5 h-5" />
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_8px_2px_rgba(239,68,68,0.7)]" />
             </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-display text-[17px] font-bold tracking-tight text-white cp-flicker">CyberPehra</span>
+                <span className="text-[9px] font-mono px-1 rounded border border-red-500/40 bg-red-500/10 text-red-400 font-bold">LEA</span>
+              </div>
+              <p className="text-[10px] font-mono text-slate-400">Command Console</p>
+            </div>
+          </div>
+          <button onClick={() => setNavOpen(false)} className="lg:hidden text-slate-400 hover:text-white"><XIcon className="w-5 h-5" /></button>
+        </div>
 
-            <div className="prediction-layout">
-              {/* FORM */}
-              <div className="prediction-card">
-                <div className="card-heading">
-                  <div>
-                    <h3>AI Fraud & Cash Withdrawal Prediction</h3>
-                    <p>Enter transaction parameters to assess criminal withdrawal likelihood</p>
-                  </div>
-                  <span className="api-badge">ENDPOINT: POST /withdrawal/</span>
-                </div>
+        <nav className="flex-1 px-3 py-4 space-y-1.5">
+          <p className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest px-3 mb-2">Operations</p>
+          {TABS.map(({ key, label, icon: Icon }, i) => {
+            const active = tab === key;
+            return (
+              <button key={key} onClick={() => switchTab(key)}
+                className={`cp-rise cp-delay-${i + 1} group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border ${active ? 'bg-red-500/15 border-red-500/40 text-white font-bold shadow-lg shadow-red-500/10' : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200 border-transparent'}`}>
+                <Icon className={`w-4 h-4 transition-transform ${active ? 'text-red-400' : 'text-slate-500 group-hover:scale-110'}`} />
+                <span className="text-xs font-mono">{label}</span>
+                {active && <span className="ml-auto w-1 h-1 rounded-full bg-red-400 cp-glow-pulse" />}
+              </button>
+            );
+          })}
+        </nav>
 
-                <form onSubmit={handlePrediction}>
-                  <div className="form-grid">
-                    <div className="field">
-                      <label>Transaction Amount (₹)</label>
-                      <input
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="e.g. 50000"
-                        required
-                      />
-                    </div>
+        <div className="px-4 py-3 border-t border-white/10 bg-slate-950/60 text-xs font-mono">
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+            <span className="tracking-widest">API ENGINE</span>
+            <span className="relative flex h-2 w-2">
+              {online && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${online ? 'bg-emerald-400' : 'bg-red-500'}`} />
+            </span>
+          </div>
+          <p className={online ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+            {online ? 'FastAPI Connected' : 'Engine Offline'}
+          </p>
+        </div>
 
-                    <div className="field">
-                      <label>Hour of Day (0 - 23)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="23"
-                        value={hour}
-                        onChange={(e) => setHour(e.target.value)}
-                        placeholder="e.g. 2"
-                        required
-                      />
-                    </div>
+        <div className="px-3 py-3 border-t border-white/10 bg-slate-950/80">
+          <div className="flex items-center justify-between px-2 py-1.5 rounded-xl bg-slate-900/60 border border-white/5 text-xs font-mono">
+            <span className="text-slate-300 font-bold truncate max-w-[130px]">{user}</span>
+            <button onClick={logout} className="text-slate-400 hover:text-red-400 p-1 rounded transition-colors" title="Logout">
+              <LogOutIcon className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
 
-                    <div className="field">
-                      <label>Transaction Velocity / Freq (past 24h)</label>
-                      <input
-                        type="number"
-                        value={frequency}
-                        onChange={(e) => setFrequency(e.target.value)}
-                        placeholder="e.g. 8"
-                        required
-                      />
-                    </div>
+      {navOpen && <div className="fixed inset-0 z-30 bg-slate-950/80 backdrop-blur-sm lg:hidden" onClick={() => setNavOpen(false)} />}
 
-                    <div className="field">
-                      <label>Prior Fraud Incidents on Account</label>
-                      <input
-                        type="number"
-                        value={previousFraud}
-                        onChange={(e) => setPreviousFraud(e.target.value)}
-                        placeholder="e.g. 3"
-                        required
-                      />
-                    </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="sticky top-0 z-20 flex items-center justify-between px-5 lg:px-8 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-white/10 cp-fade">
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+          <div className="flex items-center gap-3">
+            <button onClick={() => setNavOpen(true)} className="lg:hidden text-slate-400 hover:text-white p-1"><MenuIcon className="w-5 h-5" /></button>
+            <div className="flex items-center gap-2 font-mono text-[11px] tracking-wider">
+              <span className="text-slate-500">CYBERPEHRA</span>
+              <span className="text-slate-700">/</span>
+              <span className="text-red-400 font-bold cp-glow-pulse">LEA COMMAND</span>
+              <span className="text-slate-700">/</span>
+              <span className="text-slate-300">{TABS.find((t) => t.key === tab)?.label}</span>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono font-bold">
+            <LockIcon className="w-3.5 h-3.5" /><span>LEA COMMAND ACCESS</span>
+          </div>
+        </header>
 
-                    <div className="field">
-                      <label>Latitude (Target Location)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={lat}
-                        onChange={(e) => setLat(e.target.value)}
-                        placeholder="19.0760"
-                        required
-                      />
-                    </div>
+        <main className="flex-1 p-5 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <Stat icon={BrainIcon}    tone="cyan"    tag="AI MODEL"     label="Risk Classifier" value="Random Forest"                note="Amount · Hour · Freq"    delay={1} />
+            <Stat icon={MapPinIcon}   tone="emerald" tag="HOTSPOTS"     label="Active Zones"    value={`${hotspots.length} Zones`}   note="Incident Density Mapping" delay={2} />
+            <Stat icon={FileTextIcon} tone="amber"   tag="COMPLAINTS"   label="Total Received"  value={`${complaints.length} Cases`} note="National Registry Feed"   delay={3} />
+          </div>
 
-                    <div className="field">
-                      <label>Longitude (Target Location)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={lng}
-                        onChange={(e) => setLng(e.target.value)}
-                        placeholder="72.8777"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={predictLoading}
-                    className="predict-button"
-                  >
-                    {predictLoading ? 'Analyzing Neural Patterns...' : 'Run Intelligence Model'}
+          {tab === 'prediction' && (
+            <div className="space-y-6 cp-fade">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono">
+                <span className="text-slate-400 font-bold whitespace-nowrap tracking-widest">SCENARIO:</span>
+                {SCENARIOS.map((p) => (
+                  <button key={p.label} type="button"
+                    onClick={() => setForm({ amount: p.v[0], hour: p.v[1], freq: p.v[2], prev: p.v[3], lat: p.v[4], lng: p.v[5] })}
+                    className={`px-3 py-1.5 rounded-lg border hover:scale-[1.02] transition-all whitespace-nowrap ${SCENARIO_TONE[p.tone]}`}>
+                    {p.label}
                   </button>
-                </form>
-
-                {predictError && (
-                  <div className="prediction-error error-box">
-                    <ShieldAlertIcon className="w-4 h-4 text-red-400 shrink-0" />
-                    <span>{predictError}</span>
-                  </div>
-                )}
+                ))}
               </div>
 
-              {/* HOW IT WORKS PIPELINE */}
-              <div className="how-card">
-                <div className="card-heading">
-                  <div>
-                    <h3>Predictive Workflow</h3>
-                    <p>Architecture of CyberPehra&apos;s intelligence engine</p>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="cp-rise cp-delay-1 card p-6 lg:col-span-7 relative overflow-hidden">
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/60 to-transparent" />
+                  <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-cyan-500/10 blur-3xl" />
+                  <div className="relative flex items-center justify-between mb-4 border-b border-white/5 pb-3">
+                    <h3 className="font-display text-[15px] font-semibold tracking-tight text-white flex items-center gap-2">
+                      <BrainIcon className="w-5 h-5 text-cyan-400 cp-glow-pulse" /> AI Cashout & Fraud Risk Assessment
+                    </h3>
+                    <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/30 tracking-widest">POST /withdrawal/</span>
                   </div>
-                </div>
-
-                <div className="pipeline-vertical">
-                  <div>
-                    <span>01</span>
-                    <section>
-                      <strong>Ingestion & Feature Vector</strong>
-                      <small>Telemetry on transaction volume, nocturnal hours & account velocity.</small>
-                    </section>
-                  </div>
-
-                  <div>
-                    <span>02</span>
-                    <section>
-                      <strong>Ensemble Random Forest</strong>
-                      <small>Scikit-learn model evaluates probability of mule cash extraction.</small>
-                    </section>
-                  </div>
-
-                  <div>
-                    <span>03</span>
-                    <section>
-                      <strong>Geospatial Clustering</strong>
-                      <small>Coordinates mapped against known financial extraction hotspots.</small>
-                    </section>
-                  </div>
-
-                  <div>
-                    <span>04</span>
-                    <section>
-                      <strong>Law Enforcement Dispatch</strong>
-                      <small>Generates immediate preventive interception protocols for field officers.</small>
-                    </section>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* RESULTS SECTION */}
-            {prediction && (
-              <div className="result-section animate-fadeInUp">
-                <div className="result-title">
-                  <span />
-                  <h2>Prediction Analysis Report</h2>
-                  <div className="result-time">EVALUATED AT: {prediction.evaluated_at}</div>
-                </div>
-
-                <div className="result-grid">
-                  {/* RISK SCORE CARD */}
-                  <div
-                    className={`risk-card ${
-                      prediction.risk_level.toLowerCase().includes('high') ? 'high-risk' : ''
-                    }`}
-                  >
-                    <span>COMPUTED FRAUD RISK METRIC</span>
-                    <div
-                      className="risk-number"
-                      style={{
-                        color:
-                          prediction.risk_score > 70
-                            ? '#ff4d4f'
-                            : prediction.risk_score > 30
-                            ? '#ffc107'
-                            : '#52c41a',
-                      }}
-                    >
-                      {prediction.risk_score}
-                      <small> / 100</small>
+                  <form onSubmit={predict} className="relative space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Field label="Transaction Amount (₹)" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
+                      <Field label="Hour of Day (0–23)" type="number" min="0" max="23" value={form.hour} onChange={(e) => setForm({ ...form, hour: e.target.value })} required />
+                      <Field label="Velocity / Frequency (24h)" type="number" value={form.freq} onChange={(e) => setForm({ ...form, freq: e.target.value })} required />
+                      <Field label="Prior Fraud Incidents" type="number" value={form.prev} onChange={(e) => setForm({ ...form, prev: e.target.value })} required />
+                      <Field label="Latitude" type="number" step="any" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} required />
+                      <Field label="Longitude" type="number" step="any" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} required />
                     </div>
-                    <strong
-                      style={{
-                        color:
-                          prediction.risk_score > 70
-                            ? '#ff4d4f'
-                            : prediction.risk_score > 30
-                            ? '#ffc107'
-                            : '#52c41a',
-                      }}
-                    >
-                      {prediction.risk_level.toUpperCase()}
-                    </strong>
+                    <button type="submit" disabled={predicting}
+                      className="relative w-full btn-danger h-11 font-mono text-xs font-bold uppercase mt-2 overflow-hidden">
+                      {predicting ? 'Computing Random Forest Inference…' : 'Run AI Prediction Engine'}
+                    </button>
+                  </form>
+                  {predictErr && <div className="relative mt-3 p-3 rounded-lg bg-red-950/40 border border-red-500/40 text-xs text-red-300 cp-fade">{predictErr}</div>}
+                </div>
+
+                <div className="cp-rise cp-delay-2 card p-6 lg:col-span-5 flex flex-col justify-between relative overflow-hidden">
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
+                  <div>
+                    <h3 className="font-display text-[15px] font-semibold tracking-tight text-white mb-3 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 cp-glow-pulse" /> Predictive Flow Architecture
+                    </h3>
+                    <div className="space-y-3">
+                      {[
+                        ['1', 'Feature Extraction', 'Nocturnal hours, frequency velocity, past fraud records'],
+                        ['2', 'Random Forest Inference', 'Calculates cash withdrawal probability (0–100)'],
+                        ['3', 'GIS Density Match', 'Correlates coordinates against high-risk clusters'],
+                        ['4', 'Proactive Alert', 'Triggers alert for bank/patrol dispatch if risk > 70%'],
+                      ].map(([n, t, d], i) => (
+                        <div key={n} className={`cp-rise cp-delay-${i + 3} flex items-start gap-2.5 text-xs group`}>
+                          <span className="w-5 h-5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono font-bold flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-cyan-500/20 transition-all">{n}</span>
+                          <div><p className="font-display font-semibold text-slate-200 tracking-tight">{t}</p><p className="text-[11px] text-slate-400">{d}</p></div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                  <div className="mt-4 pt-3 border-t border-white/5 text-[11px] font-mono text-slate-400 flex justify-between">
+                    <span>STATUS: <span className="text-emerald-400">OPERATIONAL</span></span>
+                    <span className="text-emerald-400 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> READY
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-                  {/* LOCATION AND HOTSPOT CARD */}
-                  <div className="location-card">
-                    <MapPinIcon className="w-8 h-8 result-icon" />
-                    <div>
-                      <span>PREDICTED CASHOUT POINT</span>
-                      <strong>
-                        {prediction.latitude.toFixed(4)}, {prediction.longitude.toFixed(4)}
-                      </strong>
-                      <p>{prediction.hotspot_status}</p>
+              {result && (
+                <div className="cp-rise card p-6 border border-cyan-500/30 bg-slate-900/80 space-y-4 relative overflow-hidden">
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/60 to-transparent" />
+                  <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none cp-glow-pulse" />
+                  <div className="relative flex items-center justify-between border-b border-white/5 pb-3">
+                    <h3 className="font-display text-[15px] font-semibold tracking-tight text-white flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" /> Prediction Assessment Result
+                    </h3>
+                    <span className="text-xs font-mono text-slate-400">Evaluated at {result.evaluated_at}</span>
+                  </div>
+                  <div className="relative grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
+                    <div className="flex flex-col items-center justify-center text-center p-3">
+                      <div className="relative w-36 h-36 flex items-center justify-center">
+                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                          <circle cx="50" cy="50" r="46" fill="transparent" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                          <circle cx="50" cy="50" r="46" fill="transparent" stroke={color} strokeWidth="8" strokeDasharray="289" strokeDashoffset={dashOffset} strokeLinecap="round"
+                            style={{ filter: `drop-shadow(0 0 12px ${color})` }} />
+                        </svg>
+                        <div className="absolute flex flex-col items-center">
+                          <span className="font-display tabular text-5xl font-bold leading-none" style={{ color, textShadow: `0 0 20px ${color}` }}>{result.risk_score}</span>
+                          <span className="text-[9px] font-mono text-slate-400 tracking-widest mt-1">OUT OF 100</span>
+                        </div>
+                      </div>
+                      <span className={`badge ${riskBadge(result.risk_score)} mt-2 text-xs font-mono`}>{result.risk_level.toUpperCase()}</span>
+                    </div>
 
-                      <a
-                        href={`https://www.google.com/maps?q=${prediction.latitude},${prediction.longitude}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 mt-3 text-xs text-cyan-400 hover:underline"
-                      >
-                        View on Satellite Map <ExternalLinkIcon className="w-3 h-3" />
-                      </a>
+                    <div className="space-y-2 text-xs font-mono p-4 rounded-xl bg-slate-950/80 border border-white/10">
+                      <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-slate-400">LATITUDE:</span><span className="text-cyan-400 font-bold tabular">{result.latitude.toFixed(4)}° N</span></div>
+                      <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-slate-400">LONGITUDE:</span><span className="text-cyan-400 font-bold tabular">{result.longitude.toFixed(4)}° E</span></div>
+                      <div className="flex justify-between pt-1"><span className="text-slate-400">CLUSTER:</span><span className="text-amber-400 font-semibold">{result.hotspot_status}</span></div>
+                      <div className="pt-2">
+                        <a href={mapLink(result.latitude, result.longitude)} target="_blank" rel="noreferrer" className="btn-secondary text-xs w-full flex items-center justify-center gap-1.5">
+                          <MapPinIcon className="w-3.5 h-3.5 text-cyan-400" /> View on Google Maps <ExternalLinkIcon className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border flex items-start gap-3 ${result.risk_score > 70 ? 'border-red-500/40 bg-red-950/20' : result.risk_score > 30 ? 'border-amber-500/40 bg-amber-950/20' : 'border-emerald-500/40 bg-emerald-950/20'}`}>
+                      <ShieldAlertIcon className="w-5 h-5 shrink-0 text-red-400 mt-0.5 cp-glow-pulse" />
+                      <div>
+                        <p className="text-xs font-mono font-bold text-red-400 uppercase tracking-widest">LEA Action Protocol</p>
+                        <p className="text-xs text-slate-200 mt-1 leading-relaxed">{result.recommendation}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                {/* RECOMMENDATION */}
-                <div className="recommendation-card">
-                  <ShieldAlertIcon className="w-6 h-6 shrink-0" />
-                  <div>
-                    <span>TACTICAL LAW ENFORCEMENT RECOMMENDATION</span>
-                    <p>{prediction.recommendation}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 2: HOTSPOTS */}
-        {tab === 'hotspots' && (
-          <div className="bg-[#091123]/80 border border-white/10 rounded-2xl p-6 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-xl font-bold text-white">Live GIS Cybercrime Hotspots</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Aggregated clusters grouped by incident density from field complaints
-                </p>
-              </div>
-
-              <button
-                onClick={fetchHotspots}
-                disabled={hotspotsLoading}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-semibold text-cyan-300 hover:bg-white/10 transition-all"
-              >
-                <RefreshCwIcon className={hotspotsLoading ? 'animate-spin' : ''} />
-                Refresh Data
-              </button>
+              )}
             </div>
+          )}
 
-            {hotspotsLoading ? (
-              <div className="py-16 text-center text-slate-400 text-sm">
-                Querying spatial database clusters...
+          {tab === 'hotspots' && (
+            <div className="cp-rise card p-6 space-y-4 relative overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/60 to-transparent" />
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div>
+                  <h3 className="font-display text-[15px] font-semibold tracking-tight text-white flex items-center gap-2"><MapPinIcon className="w-4 h-4 text-emerald-400 cp-glow-pulse" /> Cybercrime Map Hotspots</h3>
+                  <p className="text-xs text-slate-400">Clustered coordinates calculated from complaint density</p>
+                </div>
+                <button onClick={() => load('hotspots')} disabled={loading} className="btn-secondary text-xs">
+                  <RefreshCwIcon className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Sync Hotspots
+                </button>
               </div>
-            ) : hotspots.length === 0 ? (
-              <div className="py-16 text-center text-slate-500 text-sm">
-                No incident coordinates found. Ingest complaints with latitude/longitude to generate clusters.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/10 text-slate-400 text-xs uppercase tracking-wider">
-                      <th className="py-3 px-4">Coordinates (Lat, Lng)</th>
-                      <th className="py-3 px-4">Incident Count</th>
-                      <th className="py-3 px-4">Threat Level</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {hotspots.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-white/5 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-cyan-300">
-                          {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
-                        </td>
-                        <td className="py-3.5 px-4 font-semibold text-white">
-                          {item.incident_count} reports
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                              item.risk_level.toLowerCase().includes('high')
-                                ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                                : item.risk_level.toLowerCase().includes('medium')
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                            }`}
-                          >
-                            {item.risk_level}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <a
-                            href={`https://www.google.com/maps?q=${item.latitude},${item.longitude}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300"
-                          >
-                            Open Map <ExternalLinkIcon className="w-3 h-3" />
+              {loading ? <div className="text-center py-8 text-xs font-mono text-emerald-400 tracking-widest">LOADING CLUSTERS<span className="cp-blink">_</span></div>
+                : hotspots.length === 0 ? <Empty icon={MapPinIcon} label="No Hotspot Clusters Detected" />
+                : <Table head={['Coordinates', 'Incident Count', 'Risk Level', 'Maps']}>
+                    {hotspots.map((h, i) => (
+                      <tr key={i}>
+                        <td className="font-mono text-cyan-400">{h.latitude.toFixed(4)}° N, {h.longitude.toFixed(4)}° E</td>
+                        <td className="font-mono font-bold text-white">{h.incident_count} complaints</td>
+                        <td><span className={`badge ${h.risk_level.toLowerCase().includes('high') ? 'badge-danger' : 'badge-warning'}`}>{h.risk_level}</span></td>
+                        <td className="text-right">
+                          <a href={mapLink(h.latitude, h.longitude)} target="_blank" rel="noreferrer" className="text-xs text-cyan-400 hover:underline font-mono inline-flex items-center gap-1">
+                            Pin <ExternalLinkIcon className="w-3 h-3" />
                           </a>
                         </td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: COMPLAINTS */}
-        {tab === 'complaints' && (
-          <div className="bg-[#091123]/80 border border-white/10 rounded-2xl p-6 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-              <div>
-                <h3 className="text-xl font-bold text-white">National Incident & Complaint Registry</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Database of reported cybercrime activities feeding the ML model
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowNewComplaintModal(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20"
-                >
-                  <PlusCircleIcon className="w-4 h-4" />
-                  Report Incident
-                </button>
-
-                <button
-                  onClick={fetchComplaints}
-                  disabled={complaintsLoading}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-semibold text-cyan-300 hover:bg-white/10 transition-all"
-                >
-                  <RefreshCwIcon className={complaintsLoading ? 'animate-spin' : ''} />
-                  Refresh
-                </button>
-              </div>
+                  </Table>}
             </div>
+          )}
 
-            {complaintsLoading ? (
-              <div className="py-16 text-center text-slate-400 text-sm">Loading complaints registry...</div>
-            ) : complaints.length === 0 ? (
-              <div className="py-16 text-center text-slate-500 text-sm">No complaints logged yet.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/10 text-slate-400 text-xs uppercase tracking-wider">
-                      <th className="py-3 px-4">ID</th>
-                      <th className="py-3 px-4">Crime Type</th>
-                      <th className="py-3 px-4">Fraud Amount</th>
-                      <th className="py-3 px-4">Location</th>
-                      <th className="py-3 px-4">Coordinates</th>
-                      <th className="py-3 px-4">Report Time</th>
-                      <th className="py-3 px-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {complaints.map((item) => (
-                      <tr key={item.id} className="hover:bg-white/5 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-cyan-300">#{item.id}</td>
-                        <td className="py-3.5 px-4 font-semibold text-white">{item.crime_type}</td>
-                        <td className="py-3.5 px-4 text-emerald-400 font-mono">
-                          {item.fraud_amount ? `₹${item.fraud_amount.toLocaleString()}` : 'N/A'}
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-300">{item.location || 'Unknown'}</td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-400">
-                          {item.latitude && item.longitude
-                            ? `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`
-                            : 'N/A'}
-                        </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-400">
-                          {new Date(item.complaint_time).toLocaleDateString()}{' '}
-                          {new Date(item.complaint_time).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className="inline-block px-2 py-0.5 rounded text-xs uppercase font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                            {item.status}
-                          </span>
-                        </td>
+          {tab === 'complaints' && (
+            <div className="cp-rise card p-6 space-y-4 relative overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-500/60 to-transparent" />
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div>
+                  <h3 className="font-display text-[15px] font-semibold tracking-tight text-white flex items-center gap-2"><FileTextIcon className="w-4 h-4 text-amber-400 cp-glow-pulse" /> Cybercrime Complaints</h3>
+                  <p className="text-xs text-slate-400">All complaints received from citizens and police stations</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setComplaintOpen(true)} className="btn-primary text-xs py-1.5 px-3"><PlusCircleIcon className="w-4 h-4" /> Add Complaint</button>
+                  <button onClick={() => load('complaints')} disabled={loading} className="btn-secondary text-xs py-1.5 px-3"><RefreshCwIcon className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /></button>
+                </div>
+              </div>
+              {loading ? <div className="text-center py-8 text-xs font-mono text-amber-400 tracking-widest">LOADING COMPLAINTS<span className="cp-blink">_</span></div>
+                : complaints.length === 0 ? <Empty icon={FileTextIcon} label="No Complaints Recorded" />
+                : <Table head={['Case #', 'Type', 'Amount', 'Location', 'Coordinates', 'Date', 'Status']}>
+                    {complaints.map((c) => (
+                      <tr key={c.id}>
+                        <td className="font-mono text-cyan-400 font-bold">#{c.id}</td>
+                        <td className="font-semibold text-white">{c.crime_type}</td>
+                        <td className="font-mono text-emerald-400 font-bold">{money(c.fraud_amount)}</td>
+                        <td className="text-slate-300">{c.location || 'Unknown'}</td>
+                        <td className="font-mono text-xs text-slate-400">{c.latitude && c.longitude ? `${c.latitude.toFixed(4)}°, ${c.longitude.toFixed(4)}°` : 'N/A'}</td>
+                        <td className="text-xs font-mono text-slate-400">{new Date(c.complaint_time).toLocaleDateString()}</td>
+                        <td><span className="badge badge-info">{c.status}</span></td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 4: TRANSACTIONS */}
-        {tab === 'transactions' && (
-          <div className="bg-[#091123]/80 border border-white/10 rounded-2xl p-6 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-              <div>
-                <h3 className="text-xl font-bold text-white">Forensic Transaction Tracing</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Mule accounts and illicit withdrawal transactions linked to active complaints
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowNewTxModal(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20"
-                >
-                  <PlusCircleIcon className="w-4 h-4" />
-                  Log Transaction
-                </button>
-
-                <button
-                  onClick={fetchTransactions}
-                  disabled={transactionsLoading}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-semibold text-cyan-300 hover:bg-white/10 transition-all"
-                >
-                  <RefreshCwIcon className={transactionsLoading ? 'animate-spin' : ''} />
-                  Refresh
-                </button>
-              </div>
+                  </Table>}
             </div>
+          )}
+        </main>
 
-            {transactionsLoading ? (
-              <div className="py-16 text-center text-slate-400 text-sm">Querying ledger...</div>
-            ) : transactions.length === 0 ? (
-              <div className="py-16 text-center text-slate-500 text-sm">No transactions traced yet.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/10 text-slate-400 text-xs uppercase tracking-wider">
-                      <th className="py-3 px-4">TXN ID</th>
-                      <th className="py-3 px-4">Linked Case</th>
-                      <th className="py-3 px-4">Amount</th>
-                      <th className="py-3 px-4">Channel</th>
-                      <th className="py-3 px-4">Source Account</th>
-                      <th className="py-3 px-4">Destination / Node</th>
-                      <th className="py-3 px-4">Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {transactions.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-white/5 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-semibold text-cyan-300">
-                          {tx.transaction_id}
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-300">Case #{tx.complaint_id}</td>
-                        <td className="py-3.5 px-4 font-mono text-emerald-400 font-semibold">
-                          ₹{tx.amount.toLocaleString()}
-                        </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-300">{tx.transaction_type || 'Transfer'}</td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-400">
-                          {tx.source_account || 'N/A'}
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-amber-300">
-                          {tx.destination_account || 'N/A'}
-                        </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-400">
-                          {new Date(tx.transaction_time).toLocaleDateString()}{' '}
-                          {new Date(tx.transaction_time).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        <footer className="border-t border-white/10 py-3 px-8 text-center text-xs font-mono text-slate-500 bg-slate-950/70 backdrop-blur-xl tracking-widest">
+          CYBERPEHRA <span className="mx-1.5 text-slate-700">·</span> PREDICTIVE DEFENSE COMMAND <span className="mx-1.5 text-slate-700">·</span> © {new Date().getFullYear()}
+        </footer>
+      </div>
+
+      {complaintOpen && (
+        <Modal title="Add Cybercrime Complaint" onClose={() => setComplaintOpen(false)} onSubmit={createComplaint} submitLabel="Add Complaint" submitting={false} accent="primary">
+          <div>
+            <label className="label-text">Crime Type</label>
+            <select value={newComplaint.crime_type} onChange={(e) => setNewComplaint({ ...newComplaint, crime_type: e.target.value })} className="input-field">
+              {['UPI Fraud', 'ATM Cloning', 'SIM Swap & OTP', 'Phishing Syndicate', 'Investment Scam'].map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
           </div>
-        )}
-      </main>
-
-      {/* NEW COMPLAINT MODAL */}
-      {showNewComplaintModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-1">Report Cybercrime Incident</h3>
-            <p className="text-xs text-slate-400 mb-5">
-              Submit incident telemetry into the database for immediate AI hotspot processing.
-            </p>
-
-            <form onSubmit={handleCreateComplaint} className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Crime Type</label>
-                <select
-                  value={newComplaintCrimeType}
-                  onChange={(e) => setNewComplaintCrimeType(e.target.value)}
-                  className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                >
-                  <option value="UPI Fraud">UPI Fraud</option>
-                  <option value="ATM Cloning">ATM Cloning</option>
-                  <option value="SIM Swap & OTP">SIM Swap & OTP</option>
-                  <option value="Phishing Syndicate">Phishing Syndicate</option>
-                  <option value="Investment Scam">Investment Scam</option>
-                  <option value="Card Skimming">Card Skimming</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Fraud Amount (₹)</label>
-                <input
-                  type="number"
-                  value={newComplaintAmount}
-                  onChange={(e) => setNewComplaintAmount(e.target.value)}
-                  placeholder="50000"
-                  required
-                  className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">City / Region</label>
-                <input
-                  type="text"
-                  value={newComplaintLocation}
-                  onChange={(e) => setNewComplaintLocation(e.target.value)}
-                  placeholder="e.g. Pune Central"
-                  required
-                  className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Latitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={newComplaintLat}
-                    onChange={(e) => setNewComplaintLat(e.target.value)}
-                    placeholder="18.5204"
-                    required
-                    className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Longitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={newComplaintLng}
-                    onChange={(e) => setNewComplaintLng(e.target.value)}
-                    placeholder="73.8567"
-                    required
-                    className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowNewComplaintModal(false)}
-                  className="px-4 py-2 rounded-lg bg-white/5 text-slate-300 text-xs font-semibold hover:bg-white/10 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createComplaintLoading}
-                  className="px-5 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-400/20"
-                >
-                  {createComplaintLoading ? 'Registering...' : 'Register Complaint'}
-                </button>
-              </div>
-            </form>
+          <Field label="Amount (₹)" type="number" value={newComplaint.fraud_amount} onChange={(e) => setNewComplaint({ ...newComplaint, fraud_amount: e.target.value })} required />
+          <Field label="Location" type="text" value={newComplaint.location} onChange={(e) => setNewComplaint({ ...newComplaint, location: e.target.value })} required />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Latitude" type="number" step="any" value={newComplaint.latitude} onChange={(e) => setNewComplaint({ ...newComplaint, latitude: e.target.value })} required />
+            <Field label="Longitude" type="number" step="any" value={newComplaint.longitude} onChange={(e) => setNewComplaint({ ...newComplaint, longitude: e.target.value })} required />
           </div>
-        </div>
+        </Modal>
       )}
-
-      {/* NEW TRANSACTION MODAL */}
-      {showNewTxModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-1">Log Forensic Transaction</h3>
-            <p className="text-xs text-slate-400 mb-5">
-              Record suspicious withdrawal or transfer hop linked to an open investigation.
-            </p>
-
-            <form onSubmit={handleCreateTx} className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Transaction Ref ID</label>
-                <input
-                  type="text"
-                  value={newTxId}
-                  onChange={(e) => setNewTxId(e.target.value)}
-                  required
-                  className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Linked Case #</label>
-                  <input
-                    type="number"
-                    value={newTxComplaintId}
-                    onChange={(e) => setNewTxComplaintId(e.target.value)}
-                    required
-                    className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={newTxAmount}
-                    onChange={(e) => setNewTxAmount(e.target.value)}
-                    required
-                    className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Transaction Channel</label>
-                <select
-                  value={newTxType}
-                  onChange={(e) => setNewTxType(e.target.value)}
-                  className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                >
-                  <option value="ATM Cash Withdrawal">ATM Cash Withdrawal</option>
-                  <option value="IMPS Transfer">IMPS Transfer</option>
-                  <option value="UPI P2P">UPI P2P</option>
-                  <option value="Crypto On-Ramp">Crypto On-Ramp</option>
-                  <option value="POS Swiping">POS Swiping</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Source Account</label>
-                  <input
-                    type="text"
-                    value={newTxSource}
-                    onChange={(e) => setNewTxSource(e.target.value)}
-                    placeholder="e.g. AC-98124"
-                    className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Destination Node / ATM</label>
-                  <input
-                    type="text"
-                    value={newTxDest}
-                    onChange={(e) => setNewTxDest(e.target.value)}
-                    placeholder="e.g. ATM-MUM-40"
-                    className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-cyan-400"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowNewTxModal(false)}
-                  className="px-4 py-2 rounded-lg bg-white/5 text-slate-300 text-xs font-semibold hover:bg-white/10 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createTxLoading}
-                  className="px-5 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-400/20"
-                >
-                  {createTxLoading ? 'Logging...' : 'Log Transaction'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* FOOTER */}
-      <footer className="footer">
-        CyberPehra Predictive Defense Command • Secured via End-to-End Encryption • ©{' '}
-        {new Date().getFullYear()}
-      </footer>
     </div>
   );
 }
